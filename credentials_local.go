@@ -12,6 +12,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+const (
+	envKeyKubeConfigLocation = "KUBE_CONFIG_LOCATION"
+)
+
 func getKubeClient() (*kubernetes.Clientset, error) {
 	configLoc := os.Getenv(envKeyKubeConfigLocation)
 	if configLoc == "" {
