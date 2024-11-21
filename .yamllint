@@ -1,0 +1,29 @@
+---
+extends: default
+
+ignore: |
+    /.github/*
+    /charts/secret-sync/templates/*
+    /vendor/*
+
+rules:
+    document-start: false
+    line-length: disable
+    comments-indentation: disable
+    braces:
+        min-spaces-inside: 0
+        max-spaces-inside: 2
+        min-spaces-inside-empty: 0
+        max-spaces-inside-empty: 0
+    brackets:
+        min-spaces-inside: 0
+        max-spaces-inside: 2
+        min-spaces-inside-empty: 0
+        max-spaces-inside-empty: 0
+    comments:
+        require-starting-space: true
+        min-spaces-from-content: 1
+    empty-lines:
+        max: 1
+        max-start: 0
+        max-end: 0
