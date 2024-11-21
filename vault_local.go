@@ -1,4 +1,4 @@
-//go:build !local
+//go:build local
 
 package main
 
@@ -20,7 +20,7 @@ func getVaultClient(v *viper.Viper) (*api.Client, error) {
 
 	vc, err := vaulty.NewClient(
 		vaulty.WithGeneratedVaultClient(addr),
-		vaulty.WithKubernetesAuthDefault(),
+		vaulty.WithUserPassAuth(v.GetString("vault.username"), v.GetString("vault.password")),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating vault client: %w", err)
