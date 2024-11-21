@@ -134,11 +134,20 @@ func (a *app) createKubeSecret(s *secret) {
 
 	// Add the secret data to the Kubernetes secret
 	newSecret.Data = make(map[string][]byte)
-	for k, v := range vaultSecret.Data {
-		if k != "data" {
+	for vk, vv := range vaultSecret.Data {
+		if vk != "data" {
 			continue
 		}
-		newSecret.Data[k] = []byte(fmt.Sprintf("%v", v))
+
+		m, ok := vv.(map[string]interface{})
+		if !ok {
+			slog.Error("Error casting secret data to map[string]interface{}")
+			return
+		}
+
+		for k, v := range m {
+			newSecret.Data[k] = []byte(fmt.Sprintf("%v", v))
+		}
 	}
 
 	// Add an annotation to the secret with the hash of the secret data
@@ -176,11 +185,20 @@ func (a *app) updateKubeSecret(s *secret) {
 
 	// Add the secret data to the Kubernetes secret
 	existingSecret.Data = make(map[string][]byte)
-	for k, v := range vaultSecret.Data {
-		if k != "data" {
+	for vk, vv := range vaultSecret.Data {
+		if vk != "data" {
 			continue
 		}
-		existingSecret.Data[k] = []byte(fmt.Sprintf("%v", v))
+
+		m, ok := vv.(map[string]interface{})
+		if !ok {
+			slog.Error("Error casting secret data to map[string]interface{}")
+			return
+		}
+
+		for k, v := range m {
+			existingSecret.Data[k] = []byte(fmt.Sprintf("%v", v))
+		}
 	}
 
 	hashBytes, err := json.Marshal(existingSecret.Data)
