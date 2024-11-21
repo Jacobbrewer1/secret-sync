@@ -58,6 +58,9 @@ spec:
           volumeMounts:
             - name: {{ include "secret-sync.name" . }}-config-volume
               mountPath: /tmp/config
+          env:
+            - name: "KUBERNETES_ROLE"
+              value: {{ include "secret-sync.serviceAccountName" . }}
       volumes:
         - name: {{ include "secret-sync.name" . }}-config-volume
           configMap:
