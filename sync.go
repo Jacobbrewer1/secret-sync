@@ -19,9 +19,10 @@ var (
 )
 
 type secret struct {
-	Path                 string `mapstructure:"path"`
-	DestinationNamespace string `mapstructure:"destination_namespace"`
-	DestinationName      string `mapstructure:"destination_name"`
+	Path                 string            `mapstructure:"path"`
+	DestinationNamespace string            `mapstructure:"destination_namespace"`
+	DestinationName      string            `mapstructure:"destination_name"`
+	Type                 corev1.SecretType `mapstructure:"type"` // Should be a Kubernetes secret type
 }
 
 func (s *secret) Valid() error {
@@ -123,6 +124,11 @@ func (a *app) createKubeSecret(s *secret) {
 			Namespace:   s.DestinationNamespace,
 			Annotations: map[string]string{},
 		},
+		Type: corev1.SecretTypeOpaque, // Default to opaque
+	}
+
+	if s.Type != "" {
+		newSecret.Type = s.Type
 	}
 
 	// Get the secret from Vault
@@ -151,7 +157,7 @@ func (a *app) createKubeSecret(s *secret) {
 	}
 
 	// Add an annotation to the secret with the hash of the secret data
-	hashBytes, err := json.Marshal(newSecret.Data)
+	hashBytes, err := json.Marshal(newSecret)
 	if err != nil {
 		slog.Error("Error marshalling secret data", slog.String(loggingKeyError, err.Error()))
 		return
