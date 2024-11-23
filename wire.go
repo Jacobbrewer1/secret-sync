@@ -11,6 +11,7 @@ func InitializeApp() (App, error) {
 		getKubeClient,
 		getConfig,
 		getVaultClient,
+		getWorkerPool,
 		newApp,
 	)
 	return new(app), nil

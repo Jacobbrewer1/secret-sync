@@ -7,9 +7,11 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/mux"
 	vault "github.com/hashicorp/vault/api"
+	"github.com/jacobbrewer1/workerpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
 	"k8s.io/client-go/kubernetes"
@@ -24,6 +26,7 @@ type app struct {
 	client *kubernetes.Clientset
 	config *viper.Viper
 	vc     *vault.Client
+	wp     *workerpool.WorkerPool
 }
 
 func newApp(
@@ -31,12 +34,14 @@ func newApp(
 	client *kubernetes.Clientset,
 	config *viper.Viper,
 	vc *vault.Client,
+	wp *workerpool.WorkerPool,
 ) App {
 	return &app{
 		ctx:    ctx,
 		client: client,
 		config: config,
 		vc:     vc,
+		wp:     wp,
 	}
 }
 
@@ -55,7 +60,24 @@ func (a *app) Start() {
 		}
 	}()
 
-	a.watchSecrets()
+	go a.watchSecrets()
+
+	refreshInterval := a.config.GetInt("refresh_interval")
+	if refreshInterval == 0 {
+		refreshInterval = defaultRefreshIntervalSeconds
+	}
+
+	ticker := time.NewTicker(time.Duration(refreshInterval) * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-a.ctx.Done():
+			return
+		case <-ticker.C:
+			a.syncSecrets()
+		}
+	}
 }
 
 func init() {

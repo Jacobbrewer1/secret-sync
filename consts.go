@@ -10,5 +10,6 @@ const (
 	defaultRefreshIntervalSeconds = 30
 	defaultVaultAddr              = "http://vault-active.vault.svc.cluster.local:8200"
 
-	secretAnnotationKey = "vault-sync-id"
+	secretAnnotationKey  = "vault-sync-id"
+	secretLabelManagedBy = "managed-by"
 )

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/jacobbrewer1/workerpool"
 	"github.com/spf13/viper"
 )
 
@@ -20,4 +21,10 @@ func getConfig() (*viper.Viper, error) {
 	}
 
 	return v, nil
+}
+
+func getWorkerPool() *workerpool.WorkerPool {
+	return workerpool.NewWorkerPool(
+		workerpool.WithDelayedStart(),
+	)
 }
