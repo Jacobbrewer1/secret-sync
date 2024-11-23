@@ -23,8 +23,8 @@ func getConfig() (*viper.Viper, error) {
 	return v, nil
 }
 
-func getWorkerPool() *workerpool.WorkerPool {
-	return workerpool.NewWorkerPool(
+func getWorkerPool() workerpool.Pool {
+	return workerpool.New(
 		workerpool.WithDelayedStart(),
 	)
 }
