@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/mux"
 	vault "github.com/hashicorp/vault/api"
@@ -59,7 +60,24 @@ func (a *app) Start() {
 		}
 	}()
 
-	a.watchSecrets()
+	go a.watchSecrets()
+
+	refreshInterval := a.config.GetInt("refresh_interval")
+	if refreshInterval == 0 {
+		refreshInterval = defaultRefreshIntervalSeconds
+	}
+
+	ticker := time.NewTicker(time.Duration(refreshInterval) * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-a.ctx.Done():
+			return
+		case <-ticker.C:
+			a.syncSecrets()
+		}
+	}
 }
 
 func init() {

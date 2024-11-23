@@ -17,14 +17,14 @@ type taskCreateSecret struct {
 	ctx context.Context
 	kc  *kubernetes.Clientset
 	vc  *vault.Client
-	s   secret
+	s   *secret
 }
 
 func newTaskCreateSecret(
 	ctx context.Context,
 	kc *kubernetes.Clientset,
 	vc *vault.Client,
-	secret secret,
+	secret *secret,
 ) workerpool.Runnable {
 	return &taskCreateSecret{
 		ctx: ctx,
@@ -38,10 +38,11 @@ func (t *taskCreateSecret) Run() {
 	// Create a new Kubernetes secret
 	newSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      t.s.DestinationName,
-			Namespace: t.s.DestinationNamespace,
-			Annotations: map[string]string{
-				secretAnnotationPath: base64Encode([]byte(t.s.Path)),
+			Name:        t.s.DestinationName,
+			Namespace:   t.s.DestinationNamespace,
+			Annotations: map[string]string{},
+			Labels: map[string]string{
+				secretLabelManagedBy: appName,
 			},
 		},
 		Type: corev1.SecretTypeOpaque, // Default to opaque
@@ -91,5 +92,5 @@ func (t *taskCreateSecret) Run() {
 		return
 	}
 
-	slog.Info("Secret created successfully", slog.String("namespace", t.s.DestinationNamespace), slog.String("name", t.s.DestinationName))
+	slog.Debug("Secret created successfully", slog.String("namespace", t.s.DestinationNamespace), slog.String("name", t.s.DestinationName))
 }

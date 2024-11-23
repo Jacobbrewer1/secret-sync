@@ -16,14 +16,14 @@ type taskUpdateSecret struct {
 	ctx context.Context
 	kc  *kubernetes.Clientset
 	vc  *vault.Client
-	s   secret
+	s   *secret
 }
 
 func newTaskUpdateSecret(
 	ctx context.Context,
 	kc *kubernetes.Clientset,
 	vc *vault.Client,
-	secret secret,
+	secret *secret,
 ) workerpool.Runnable {
 	return &taskUpdateSecret{
 		ctx: ctx,
@@ -39,6 +39,10 @@ func (t *taskUpdateSecret) Run() {
 	if err != nil {
 		slog.Error("Error getting existing secret", slog.String(loggingKeyError, err.Error()))
 		return
+	}
+
+	existingSecret.Labels = map[string]string{
+		secretLabelManagedBy: appName,
 	}
 
 	// Get the secret from Vault
@@ -73,20 +77,17 @@ func (t *taskUpdateSecret) Run() {
 	}
 	hash := shaHash(hashBytes)
 
-	pathEncoded := base64Encode([]byte(t.s.Path))
 	if existingSecret.Annotations == nil {
 		existingSecret.Annotations = map[string]string{
-			secretAnnotationKey:  hash,
-			secretAnnotationPath: pathEncoded,
+			secretAnnotationKey: hash,
 		}
 	} else if existingSecret.Annotations[secretAnnotationKey] == hash &&
-		(existingSecret.Annotations[secretAnnotationPath] != "" && existingSecret.Annotations[secretAnnotationPath] == pathEncoded) {
+		(existingSecret.Labels != nil && existingSecret.Labels[secretLabelManagedBy] == appName) {
 		slog.Debug("Secret is up to date", slog.String("namespace", t.s.DestinationNamespace), slog.String("name", t.s.DestinationName))
 		return
 	}
 
 	existingSecret.Annotations[secretAnnotationKey] = hash
-	existingSecret.Annotations[secretAnnotationPath] = pathEncoded
 
 	_, err = t.kc.CoreV1().Secrets(t.s.DestinationNamespace).Update(t.ctx, existingSecret, metav1.UpdateOptions{})
 	if err != nil {
@@ -94,5 +95,5 @@ func (t *taskUpdateSecret) Run() {
 		return
 	}
 
-	slog.Info("Secret updated successfully", slog.String("namespace", t.s.DestinationNamespace), slog.String("name", t.s.DestinationName))
+	slog.Debug("Secret updated successfully", slog.String("namespace", t.s.DestinationNamespace), slog.String("name", t.s.DestinationName))
 }

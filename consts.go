@@ -11,5 +11,5 @@ const (
 	defaultVaultAddr              = "http://vault-active.vault.svc.cluster.local:8200"
 
 	secretAnnotationKey  = "vault-sync-id"
-	secretAnnotationPath = "path"
+	secretLabelManagedBy = "managed-by"
 )

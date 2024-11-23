@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"log/slog"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	coreErr "k8s.io/apimachinery/pkg/api/errors"
@@ -36,30 +35,32 @@ func (s *secret) Valid() error {
 }
 
 func (a *app) watchSecrets() {
-	refreshInterval := a.config.GetInt("refresh_interval")
-	if refreshInterval == 0 {
-		refreshInterval = defaultRefreshIntervalSeconds
+	// Start a kubernetes watcher for secrets
+	watcher, err := a.client.CoreV1().Secrets("").Watch(a.ctx, metav1.ListOptions{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "Secret",
+		},
+		LabelSelector: metav1.FormatLabelSelector(&metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				secretLabelManagedBy: appName,
+			},
+		}),
+	})
+	if err != nil {
+		slog.Error("Error watching secrets", slog.String(loggingKeyError, err.Error()))
+		return
 	}
 
-	ticker := time.NewTicker(time.Duration(refreshInterval) * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-a.ctx.Done():
-			return
-		case <-ticker.C:
-			a.syncSecrets()
-		}
+	for event := range watcher.ResultChan() {
+		a.wp.MustSchedule(newTaskWatcherEvent(event, a))
 	}
 }
 
 // All secrets will have the annotation of "vault-sync-id=hash" where hash is the hash of the path.
 func (a *app) syncSecrets() {
-	// Unmarshal the secrets into a slice of secret structs
-	secrets := make([]secret, 0)
-	if err := a.config.UnmarshalKey("secrets", &secrets); err != nil {
-		slog.Error("Error unmarshalling secrets", slog.String(loggingKeyError, err.Error()))
+	secrets, err := a.getSecrets()
+	if err != nil {
+		slog.Error("Error getting secrets", slog.String(loggingKeyError, err.Error()))
 		return
 	}
 
