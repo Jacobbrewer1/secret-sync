@@ -26,7 +26,7 @@ type app struct {
 	client *kubernetes.Clientset
 	config *viper.Viper
 	vc     *vault.Client
-	wp     *workerpool.WorkerPool
+	wp     workerpool.Pool
 }
 
 func newApp(
@@ -34,7 +34,7 @@ func newApp(
 	client *kubernetes.Clientset,
 	config *viper.Viper,
 	vc *vault.Client,
-	wp *workerpool.WorkerPool,
+	wp workerpool.Pool,
 ) App {
 	return &app{
 		ctx:    ctx,

@@ -9,7 +9,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/vault/api v1.15.0
 	github.com/jacobbrewer1/vaulty v0.1.4
-	github.com/jacobbrewer1/workerpool v0.0.2
+	github.com/jacobbrewer1/workerpool v0.0.3
 	github.com/prometheus/client_golang v1.20.5
 	github.com/spf13/viper v1.19.0
 	k8s.io/api v0.31.3

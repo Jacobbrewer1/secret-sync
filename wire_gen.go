@@ -22,7 +22,7 @@ func InitializeApp() (App, error) {
 	if err != nil {
 		return nil, err
 	}
-	workerPool := getWorkerPool()
-	mainApp := newApp(context, clientset, viper, client, workerPool)
+	pool := getWorkerPool()
+	mainApp := newApp(context, clientset, viper, client, pool)
 	return mainApp, nil
 }
