@@ -11,11 +11,3 @@ func shaHash(data []byte) string {
 	hasher.Write(data)
 	return fmt.Sprintf("%x", hasher.Sum(nil))
 }
-
-func base64Encode(data []byte) string {
-	return base64.StdEncoding.EncodeToString(data)
-}
-
-func base64Decode(data string) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(data)
-}
