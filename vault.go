@@ -19,7 +19,7 @@ func getVaultClient(v *viper.Viper) (*api.Client, error) {
 	}
 
 	vc, err := vaulty.NewClient(
-		vaulty.WithGeneratedVaultClient(addr),
+		vaulty.WithAddr(addr),
 		vaulty.WithKubernetesAuthDefault(),
 	)
 	if err != nil {
