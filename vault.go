@@ -14,7 +14,7 @@ import (
 func getVaultClient(v *viper.Viper) (*api.Client, error) {
 	addr := v.GetString("vault.address")
 	if addr == "" {
-		slog.Info(fmt.Sprintf("No vault address provided, defaulting to %s", defaultVaultAddr))
+		slog.Info("No vault address provided, using default address", slog.String("default_address", defaultVaultAddr))
 		addr = defaultVaultAddr
 	}
 

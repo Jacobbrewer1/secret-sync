@@ -59,7 +59,7 @@ func (t *taskUpdateSecret) Run() {
 			continue
 		}
 
-		m, ok := vv.(map[string]interface{})
+		m, ok := vv.(map[string]any)
 		if !ok {
 			slog.Error("Error casting secret data to map[string]interface{}")
 			return
