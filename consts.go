@@ -6,6 +6,7 @@ const (
 	loggingKeyAppName = "app"
 	loggingKeyError   = "err"
 	loggingKeySignal  = "signal"
+	loggingKeyAddr    = "addr"
 
 	defaultKubeConfigLocation     = "$HOME/.kube/config"
 	defaultRefreshIntervalSeconds = 30
