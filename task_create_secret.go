@@ -92,5 +92,8 @@ func (t *taskCreateSecret) Run() {
 		return
 	}
 
-	slog.Debug("Secret created successfully", slog.String("namespace", t.s.DestinationNamespace), slog.String("name", t.s.DestinationName))
+	slog.Debug("Secret created successfully",
+		slog.String(loggingKeyNamespace, t.s.DestinationNamespace),
+		slog.String(loggingKeyDestination, t.s.DestinationName),
+	)
 }

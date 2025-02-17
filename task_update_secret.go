@@ -83,7 +83,10 @@ func (t *taskUpdateSecret) Run() {
 		}
 	} else if existingSecret.Annotations[secretAnnotationKey] == hash &&
 		(existingSecret.Labels != nil && existingSecret.Labels[secretLabelManagedBy] == appName) {
-		slog.Debug("Secret is up to date", slog.String("namespace", t.s.DestinationNamespace), slog.String("name", t.s.DestinationName))
+		slog.Debug("Secret is up to date",
+			slog.String(loggingKeyNamespace, t.s.DestinationNamespace),
+			slog.String(loggingKeyDestination, t.s.DestinationName),
+		)
 		return
 	}
 
@@ -95,5 +98,8 @@ func (t *taskUpdateSecret) Run() {
 		return
 	}
 
-	slog.Debug("Secret updated successfully", slog.String("namespace", t.s.DestinationNamespace), slog.String("name", t.s.DestinationName))
+	slog.Debug("Secret updated successfully",
+		slog.String(loggingKeyNamespace, t.s.DestinationNamespace),
+		slog.String(loggingKeyDestination, t.s.DestinationName),
+	)
 }

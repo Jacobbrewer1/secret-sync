@@ -3,10 +3,12 @@ package main
 const (
 	appName = "secret-sync"
 
-	loggingKeyAppName = "app"
-	loggingKeyError   = "err"
-	loggingKeySignal  = "signal"
-	loggingKeyAddr    = "addr"
+	loggingKeyAppName     = "app"
+	loggingKeyError       = "err"
+	loggingKeySignal      = "signal"
+	loggingKeyAddr        = "addr"
+	loggingKeyNamespace   = "namespace"
+	loggingKeyDestination = "destination"
 
 	defaultKubeConfigLocation     = "$HOME/.kube/config"
 	defaultRefreshIntervalSeconds = 30

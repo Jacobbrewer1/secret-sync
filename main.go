@@ -55,7 +55,7 @@ func (a *app) Start() {
 			Handler:           r,
 		}
 		slog.Info("Starting metrics server")
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) { // nolint:revive // Traditional error handling
 			slog.Error("Error starting metrics server", slog.String(loggingKeyError, err.Error()))
 			os.Exit(1)
 		}

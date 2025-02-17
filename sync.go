@@ -98,7 +98,7 @@ func (a *app) syncSecrets() {
 				slog.Error("Error getting secret", slog.String(loggingKeyError, err.Error()))
 				return
 			} else if foundSecret.Namespace != s.DestinationNamespace {
-				slog.Info("Secret exists in a different namespace", slog.String("namespace", foundSecret.Namespace))
+				slog.Info("Secret exists in a different namespace", slog.String(loggingKeyNamespace, foundSecret.Namespace))
 
 				// Delete the secret
 				if err := a.client.CoreV1().Secrets(ns.Name).Delete(a.ctx, foundSecret.Namespace, metav1.DeleteOptions{}); err != nil {
