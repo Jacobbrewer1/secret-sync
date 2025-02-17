@@ -14,7 +14,7 @@ func initializeLogger() {
 	}))
 
 	logger.With(
-		loggingKeyAppName, appName,
+		slog.String(loggingKeyAppName, appName),
 	)
 
 	slog.SetDefault(logger)
@@ -22,8 +22,7 @@ func initializeLogger() {
 
 // replaceLogAttrs is a slog.HandlerOptions.ReplaceAttr function that replaces some attributes.
 func replaceLogAttrs(_ []string, a slog.Attr) slog.Attr {
-	switch a.Key {
-	case slog.SourceKey:
+	if a.Key == slog.SourceKey {
 		// Cut the source file to a relative path.
 		v := strings.Split(a.Value.String(), "/")
 		idx := len(v) - 2

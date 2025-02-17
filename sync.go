@@ -23,15 +23,16 @@ type secret struct {
 }
 
 func (s *secret) Valid() error {
-	if s.Path == "" {
+	switch {
+	case s.Path == "":
 		return ErrNoPath
-	} else if s.DestinationNamespace == "" {
+	case s.DestinationNamespace == "":
 		return ErrNoDestinationNamespace
-	} else if s.DestinationName == "" {
+	case s.DestinationName == "":
 		return ErrNoDestinationName
+	default:
+		return nil
 	}
-
-	return nil
 }
 
 func (a *app) watchSecrets() {
@@ -78,7 +79,9 @@ func (a *app) syncSecrets() {
 		}
 
 		secretFound := false
-		for _, ns := range namespaces.Items {
+		for i := range namespaces.Items {
+			ns := &namespaces.Items[i] // Make the app less memory intensive
+
 			// Does the secret exist in this namespace?
 			foundSecret, err := a.client.CoreV1().Secrets(ns.Name).Get(a.ctx, s.DestinationName, metav1.GetOptions{
 				TypeMeta: metav1.TypeMeta{
@@ -87,7 +90,7 @@ func (a *app) syncSecrets() {
 			})
 			if err != nil {
 				newErr := new(coreErr.StatusError)
-				if errors.As(err, &newErr) && newErr.ErrStatus.Reason == metav1.StatusReasonNotFound {
+				if newErr.ErrStatus.Reason == metav1.StatusReasonNotFound && errors.As(err, &newErr) {
 					// Secret does not exist in this namespace
 					continue
 				}
@@ -95,7 +98,7 @@ func (a *app) syncSecrets() {
 				slog.Error("Error getting secret", slog.String(loggingKeyError, err.Error()))
 				return
 			} else if foundSecret.Namespace != s.DestinationNamespace {
-				slog.Info("Secret exists in a different namespace", slog.String("namespace", foundSecret.Namespace))
+				slog.Info("Secret exists in a different namespace", slog.String(loggingKeyNamespace, foundSecret.Namespace))
 
 				// Delete the secret
 				if err := a.client.CoreV1().Secrets(ns.Name).Delete(a.ctx, foundSecret.Namespace, metav1.DeleteOptions{}); err != nil {

@@ -54,10 +54,11 @@ func (t *taskWatcherEvent) handlePodDeleted() {
 	foundSecret := new(secret)
 	// Find the secret that matches the deleted secret
 	for _, s := range secrets {
-		if s.DestinationNamespace == obj.Namespace && s.DestinationName == obj.Name {
-			foundSecret = s
-			break
+		if s.DestinationNamespace != obj.Namespace || s.DestinationName != obj.Name {
+			continue
 		}
+		foundSecret = s
+		break
 	}
 	if foundSecret.Path == "" {
 		slog.Warn("Secret not found")

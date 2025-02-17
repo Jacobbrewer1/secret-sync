@@ -40,7 +40,7 @@ func (t *taskCreateSecret) Run() {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        t.s.DestinationName,
 			Namespace:   t.s.DestinationNamespace,
-			Annotations: map[string]string{},
+			Annotations: make(map[string]string),
 			Labels: map[string]string{
 				secretLabelManagedBy: appName,
 			},
@@ -66,7 +66,7 @@ func (t *taskCreateSecret) Run() {
 			continue
 		}
 
-		m, ok := vv.(map[string]interface{})
+		m, ok := vv.(map[string]any)
 		if !ok {
 			slog.Error("Error casting secret data to map[string]interface{}")
 			return
@@ -92,5 +92,8 @@ func (t *taskCreateSecret) Run() {
 		return
 	}
 
-	slog.Debug("Secret created successfully", slog.String("namespace", t.s.DestinationNamespace), slog.String("name", t.s.DestinationName))
+	slog.Debug("Secret created successfully",
+		slog.String(loggingKeyNamespace, t.s.DestinationNamespace),
+		slog.String(loggingKeyDestination, t.s.DestinationName),
+	)
 }

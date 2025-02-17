@@ -16,7 +16,7 @@ func getRootContext() context.Context {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 		got := <-sig
-		slog.Info("Received signal, shutting down", slog.String("signal", got.String()))
+		slog.Info("Received signal, shutting down", slog.String(loggingKeySignal, got.String()))
 		cancel()
 	}()
 
