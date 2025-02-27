@@ -90,7 +90,7 @@ func (a *app) syncSecrets() {
 			})
 			if err != nil {
 				newErr := new(coreErr.StatusError)
-				if newErr.ErrStatus.Reason == metav1.StatusReasonNotFound && errors.As(err, &newErr) {
+				if errors.As(err, &newErr) && newErr.ErrStatus.Reason == metav1.StatusReasonNotFound { // nolint:revive // We need to cast see if the error is a StatusError before we can check the reason
 					// Secret does not exist in this namespace
 					continue
 				}

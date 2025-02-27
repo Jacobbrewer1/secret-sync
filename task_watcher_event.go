@@ -10,8 +10,7 @@ import (
 
 type taskWatcherEvent struct {
 	event watch.Event
-
-	a *app
+	a     *app
 }
 
 func newTaskWatcherEvent(
@@ -30,14 +29,14 @@ func (t *taskWatcherEvent) Run() {
 		// Do nothing
 	case watch.Deleted:
 		slog.Debug("Secret deletion event")
-		t.handlePodDeleted()
+		t.handleDeletedSecret()
 	case watch.Error:
 		slog.Error("Watcher event error")
 	}
 }
 
-// handlePodDeleted recreates the secret when the secret is deleted
-func (t *taskWatcherEvent) handlePodDeleted() {
+// handleDeletedSecret recreates the secret when the secret is deleted
+func (t *taskWatcherEvent) handleDeletedSecret() {
 	// Find the secret from the config
 	secrets, err := t.a.getSecrets()
 	if err != nil {
