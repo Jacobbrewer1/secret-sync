@@ -20,7 +20,7 @@ func getVaultClient(v *viper.Viper) (*api.Client, error) {
 
 	vc, err := vaulty.NewClient(
 		vaulty.WithGeneratedVaultClient(addr),
-		vaulty.WithUserPassAuth(v.GetString("vault.username"), v.GetString("vault.password")),
+		vaulty.WithTokenAuth(v.GetString("vault.token")),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating vault client: %w", err)
