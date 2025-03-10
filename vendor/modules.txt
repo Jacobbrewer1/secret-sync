@@ -129,7 +129,7 @@ github.com/hashicorp/vault/api/auth/userpass
 # github.com/imdario/mergo v0.3.6
 ## explicit
 github.com/imdario/mergo
-# github.com/jacobbrewer1/vaulty v0.1.8
+# github.com/jacobbrewer1/vaulty v0.1.10
 ## explicit; go 1.24
 github.com/jacobbrewer1/vaulty
 # github.com/jacobbrewer1/workerpool v0.0.3

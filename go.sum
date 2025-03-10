@@ -93,8 +93,8 @@ github.com/hashicorp/vault/api/auth/userpass v0.9.0 h1:tdIY+xe9O0SAcNY1CK7Wk0ENW
 github.com/hashicorp/vault/api/auth/userpass v0.9.0/go.mod h1:W2Cb0z6MjAHkDjGG95mmRGzCETX5Y+O++UBXX/ZlNGc=
 github.com/imdario/mergo v0.3.6 h1:xTNEAn+kxVO7dTZGu0CegyqKZmoWFI0rF8UxjlB2d28=
 github.com/imdario/mergo v0.3.6/go.mod h1:2EnlNZ0deacrJVfApfmtdGgDfMuh/nq6Ok1EcJh5FfA=
-github.com/jacobbrewer1/vaulty v0.1.8 h1:LuGIp4D68rHVlg6HTg4ZP9x6siRxwuIa2fkodX12zv4=
-github.com/jacobbrewer1/vaulty v0.1.8/go.mod h1:tnYZtEh0yLIbv48oekMwjAFabzi+v0lb4EGmX9XwEAk=
+github.com/jacobbrewer1/vaulty v0.1.10 h1:8GT7fzQsZKh2hd4cY1OqYXXJVWb5f26Jab0KMKvJ15U=
+github.com/jacobbrewer1/vaulty v0.1.10/go.mod h1:VYnjOeOhXuN1nlUHhsmN3soWjVmUBIRmnJj6sKC3EIo=
 github.com/jacobbrewer1/workerpool v0.0.3 h1:MnRiYACaCO9+M2ogM6gxQcySdbER/T6mehTvBQLRg6I=
 github.com/jacobbrewer1/workerpool v0.0.3/go.mod h1:vZnQ5Ynp2rnihrFubKfyf7S+hnxC2TgQt755PFQ7cBQ=
 github.com/josharian/intern v1.0.0 h1:vlS4z54oSdjm0bgjRigI+G1HpF+tI+9rE5LLzOg8HmY=
