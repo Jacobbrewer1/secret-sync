@@ -8,7 +8,7 @@ require (
 	github.com/google/wire v0.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/vault/api v1.16.0
-	github.com/jacobbrewer1/vaulty v0.1.8
+	github.com/jacobbrewer1/vaulty v0.1.10
 	github.com/jacobbrewer1/workerpool v0.0.3
 	github.com/prometheus/client_golang v1.21.0
 	github.com/spf13/viper v1.19.0
