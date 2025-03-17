@@ -34,6 +34,9 @@ type pool struct {
 	// wg is the wait group for the worker pool.
 	wg *sync.WaitGroup
 
+	// mut is the mutex to protect the started flag.
+	mut *sync.RWMutex
+
 	// done is the channel to signal the worker pool to stop.
 	done chan struct{}
 
@@ -67,6 +70,7 @@ func New(opts ...WorkerOption) Pool {
 		totalWorkers:   runtime.NumCPU(),
 		maxQueueLength: runtime.NumCPU() * 1000,
 		wg:             new(sync.WaitGroup),
+		mut:            new(sync.RWMutex),
 		done:           make(chan struct{}),
 		delayedStart:   false,
 		started:        false,
@@ -92,4 +96,18 @@ func New(opts ...WorkerOption) Pool {
 	}
 
 	return p
+}
+
+func (p *pool) setStarted(started bool) {
+	p.mut.Lock()
+	defer p.mut.Unlock()
+
+	p.started = started
+}
+
+func (p *pool) isStarted() bool {
+	p.mut.RLock()
+	defer p.mut.RUnlock()
+
+	return p.started
 }
