@@ -16,13 +16,13 @@ var (
 
 // start starts the worker pool by deploying the workers to the pool.
 func (p *pool) start() {
-	if p.started {
+	if p.isStarted() {
 		return
 	}
 
-	p.started = true
+	p.setStarted(true)
 	idleWorkers.Set(float64(p.totalWorkers))
-	for i := 0; i < p.totalWorkers; i++ {
+	for range p.totalWorkers {
 		p.wg.Add(1)
 		go p.deployWorker()
 	}
@@ -38,6 +38,7 @@ func (p *pool) deployWorker() {
 			return
 		case task, ok := <-p.tasks:
 			if !ok {
+				// The tasks channel is closed
 				return
 			}
 
@@ -74,7 +75,7 @@ func (p *pool) Stop() {
 		activeWorkers.Set(0)
 		pendingTasks.Set(0)
 
-		p.started = false
+		p.setStarted(false)
 	}()
 
 	// Clear down the tasks channel while waiting for the workers to finish
@@ -122,7 +123,7 @@ func (p *pool) Schedule(task Runnable) error {
 		return ErrWorkerPoolStopped
 	}
 
-	if p.delayedStart && !p.started {
+	if p.delayedStart && !p.isStarted() {
 		p.start()
 	}
 
@@ -144,7 +145,7 @@ func (p *pool) BlockingSchedule(task Runnable) error {
 		return ErrWorkerPoolStopped
 	}
 
-	if p.delayedStart && !p.started {
+	if p.delayedStart && !p.isStarted() {
 		p.start()
 	}
 
