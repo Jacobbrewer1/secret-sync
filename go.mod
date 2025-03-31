@@ -2,8 +2,6 @@ module github.com/jacobbrewer1/secret-sync
 
 go 1.24
 
-toolchain go1.24.0
-
 require (
 	github.com/google/wire v0.6.0
 	github.com/gorilla/mux v1.8.1
@@ -11,7 +9,7 @@ require (
 	github.com/jacobbrewer1/vaulty v0.1.10
 	github.com/jacobbrewer1/workerpool v0.0.4
 	github.com/prometheus/client_golang v1.21.1
-	github.com/spf13/viper v1.20.0
+	github.com/spf13/viper v1.20.1
 	k8s.io/api v0.31.3
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.31.3
