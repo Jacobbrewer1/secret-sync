@@ -43,8 +43,6 @@ func NewApp(l *slog.Logger) (*App, error) {
 }
 
 func (a *App) Start() error {
-	var secretSyncFunc web.AsyncTaskFunc
-
 	if err := a.base.Start(
 		web.WithVaultClient(),
 		web.WithInClusterKubeClient(),
@@ -87,26 +85,12 @@ func (a *App) Start() error {
 			a.config.syncInterval = interval
 			return nil
 		}),
-		web.WithDependencyBootstrap(func(ctx context.Context) error {
-			secretSyncFunc = syncSecrets(
-				logging.LoggerWithComponent(a.base.Logger(), "sync-secrets"),
-				a.base.KubeClient(),
-				a.base.VaultClient(),
-				a.base.ServiceEndpointHashBucket(),
-				a.config.syncInterval,
-				a.config.Secrets,
-			)
-			return nil
-		}),
-		web.WithIndefiniteAsyncTask("watch-secrets", watchSecrets(
+		web.WithIndefiniteAsyncTask("watch-secrets", a.watchSecrets(
 			logging.LoggerWithComponent(a.base.Logger(), "watch-secrets"),
-			a.base.KubeClient(),
-			a.base.SecretInformer(),
-			a.base.VaultClient(),
-			a.base.ServiceEndpointHashBucket(),
-			a.config.Secrets,
 		)),
-		web.WithIndefiniteAsyncTask("sync-secrets", secretSyncFunc),
+		web.WithIndefiniteAsyncTask("sync-secrets", a.syncSecretsTicker(
+			logging.LoggerWithComponent(a.base.Logger(), "sync-secrets"),
+		)),
 	); err != nil {
 		return fmt.Errorf("failed to start web app: %w", err)
 	}
