@@ -80,6 +80,8 @@ func (a *App) Start() error {
 				return errors.New("invalid refresh interval")
 			}
 
+			a.base.Logger().Info("Interval set", slog.String(loggingKeyInterval, interval.String()))
+
 			a.config.syncInterval = interval
 			return nil
 		}),
