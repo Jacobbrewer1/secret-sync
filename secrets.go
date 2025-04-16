@@ -61,20 +61,8 @@ func (s *Secret) Upsert(ctx context.Context, kubeClient kubernetes.Interface, va
 
 	newSecret.Data = make(map[string][]byte)
 	for vk, vv := range value {
-		if vk != "data" {
-			continue
-		}
-
-		m, ok := vv.(map[string]any)
-		if !ok {
-			return fmt.Errorf("invalid value for key %s: %v", vk, vv)
-		}
-
-		for k, v := range m {
-			newSecret.Data[k] = []byte(fmt.Sprintf("%v", v))
-		}
+		newSecret.Data[vk] = []byte(fmt.Sprintf("%v", vv))
 	}
-
 	if len(newSecret.Data) == 0 {
 		return errors.New("no data found in secret")
 	}
