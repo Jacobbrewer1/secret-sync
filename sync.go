@@ -159,7 +159,7 @@ func syncSecrets(
 							l.Info("Secret exists in a different namespace", slog.String(loggingKeyNamespace, foundSecret.Namespace))
 
 							// Delete the secret
-							if err := kubeClient.CoreV1().Secrets(ns.Name).Delete(ctx, foundSecret.Namespace, metav1.DeleteOptions{}); err != nil { // nolint:revive // Traditional error handling
+							if err := kubeClient.CoreV1().Secrets(ns.Name).Delete(ctx, foundSecret.Name, metav1.DeleteOptions{}); err != nil { // nolint:revive // Traditional error handling
 								l.Error("Error deleting secret", slog.String(loggingKeyError, err.Error()))
 								return
 							}
