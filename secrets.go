@@ -20,7 +20,7 @@ var (
 
 type Secret struct {
 	Mount                string            `mapstructure:"mount"`
-	Name                 string            `mapstructure:"path"`
+	Name                 string            `mapstructure:"name"`
 	DestinationNamespace string            `mapstructure:"destination_namespace"`
 	DestinationName      string            `mapstructure:"destination_name"`
 	Type                 corev1.SecretType `mapstructure:"type"` // Should be a Kubernetes Secret type

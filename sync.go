@@ -93,7 +93,10 @@ func deletedSecretHandler(
 		}
 
 		// Get the secret from vault
-		vaultSecret, err := vaultClient.Path(foundSecret.Name).GetKvSecretV2(ctx)
+		vaultSecret, err := vaultClient.Path(
+			foundSecret.Name,
+			vaulty.WithMount(foundSecret.Mount),
+		).GetKvSecretV2(ctx)
 		if err != nil {
 			l.Error("Error getting secret from vault", slog.String(loggingKeyError, err.Error()))
 			return
