@@ -3,97 +3,121 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
+	"fmt"
 	"log/slog"
-	"net/http"
-	"os"
 	"time"
 
-	"github.com/gorilla/mux"
-	vault "github.com/hashicorp/vault/api"
-	"github.com/jacobbrewer1/workerpool"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/spf13/viper"
-	"k8s.io/client-go/kubernetes"
+	"github.com/caarlos0/env/v10"
+	"github.com/fsnotify/fsnotify"
+	"github.com/jacobbrewer1/web"
+	"github.com/jacobbrewer1/web/logging"
 )
 
-type App interface {
-	Start()
-}
+type (
+	AppConfig struct {
+		Secrets      []*Secret
+		syncInterval time.Duration
+	}
 
-type app struct {
-	ctx    context.Context
-	client *kubernetes.Clientset
-	config *viper.Viper
-	vc     *vault.Client
-	wp     workerpool.Pool
-}
+	App struct {
+		config *AppConfig
+		base   *web.App
+	}
+)
 
-func newApp(
-	ctx context.Context,
-	client *kubernetes.Clientset,
-	config *viper.Viper,
-	vc *vault.Client,
-	wp workerpool.Pool,
-) App {
-	return &app{
-		ctx:    ctx,
-		client: client,
+func NewApp(l *slog.Logger) (*App, error) {
+	base, err := web.NewApp(l)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create web app: %w", err)
+	}
+
+	config := new(AppConfig)
+	if err := env.Parse(config); err != nil {
+		return nil, fmt.Errorf("failed to parse environment: %w", err)
+	}
+
+	return &App{
 		config: config,
-		vc:     vc,
-		wp:     wp,
-	}
+		base:   base,
+	}, nil
 }
 
-func (a *app) Start() {
-	go func() {
-		r := mux.NewRouter()
-		r.HandleFunc("/metrics", promhttp.Handler().ServeHTTP)
-		srv := &http.Server{
-			Addr:              ":8080",
-			ReadHeaderTimeout: 10 * time.Second,
-			Handler:           r,
-		}
-		slog.Info("Starting metrics server")
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) { // nolint:revive // Traditional error handling
-			slog.Error("Error starting metrics server", slog.String(loggingKeyError, err.Error()))
-			os.Exit(1)
-		}
-	}()
+func (a *App) Start() error {
+	if err := a.base.Start(
+		web.WithVaultClient(),
+		web.WithInClusterKubeClient(),
+		web.WithKubernetesSecretInformer(),
+		web.WithServiceEndpointHashBucket(appName),
+		web.WithDependencyBootstrap(func(ctx context.Context) error {
+			vip := a.base.Viper()
+			vip.OnConfigChange(func(e fsnotify.Event) {
+				a.base.Shutdown() // Restart the app on config change
+			})
+			return nil
+		}),
+		web.WithDependencyBootstrap(func(ctx context.Context) error {
+			vip := a.base.Viper()
+			secrets := make([]*Secret, 0)
+			if err := vip.UnmarshalKey("secrets", &secrets); err != nil {
+				return fmt.Errorf("error unmarshalling secrets: %w", err)
+			} else if len(secrets) == 0 {
+				return errors.New("no secrets provided")
+			}
 
-	go a.watchSecrets()
+			for _, secret := range secrets {
+				if err := secret.Valid(); err != nil {
+					return fmt.Errorf("invalid secret: %w", err)
+				}
+			}
+			a.config.Secrets = secrets
+			return nil
+		}),
+		web.WithDependencyBootstrap(func(ctx context.Context) error {
+			interval, err := time.ParseDuration(a.base.Viper().GetString("refresh_interval"))
+			if err != nil {
+				return fmt.Errorf("failed to parse refresh interval: %w", err)
+			} else if interval <= 0 {
+				return errors.New("invalid refresh interval")
+			}
 
-	refreshInterval := a.config.GetInt("refresh_interval")
-	if refreshInterval == 0 {
-		refreshInterval = defaultRefreshIntervalSeconds
+			a.config.syncInterval = interval
+			return nil
+		}),
+		web.WithIndefiniteAsyncTask("watch-secrets", watchSecrets(
+			logging.LoggerWithComponent(a.base.Logger(), "watch-secrets"),
+			a.base.KubeClient(),
+			a.base.SecretInformer(),
+			a.base.VaultClient(),
+			a.base.ServiceEndpointHashBucket(),
+			a.config.Secrets,
+		)),
+	); err != nil {
+		return fmt.Errorf("failed to start web app: %w", err)
 	}
 
-	ticker := time.NewTicker(time.Duration(refreshInterval) * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-a.ctx.Done():
-			return
-		case <-ticker.C:
-			a.syncSecrets()
-		}
-	}
+	return nil
 }
 
-func init() {
-	flag.Parse()
-	initializeLogger()
+func (a *App) WaitForEnd() {
+	a.base.WaitForEnd(a.base.Shutdown)
 }
 
 func main() {
-	a, err := InitializeApp()
+	l := logging.NewLogger(
+		logging.WithAppName(appName),
+	)
+
+	app, err := NewApp(l)
 	if err != nil {
-		slog.Error("Error initializing app", slog.String(loggingKeyError, err.Error()))
-		os.Exit(1)
-	} else if a == nil {
-		slog.Error("App is nil")
-		os.Exit(1)
+		l.Error("failed to create app", slog.Any(logging.KeyError, err))
+		panic("failed to create app")
 	}
-	a.Start()
+
+	err = app.Start()
+	if err != nil {
+		l.Error("failed to start app", slog.Any(logging.KeyError, err))
+		panic("failed to start app")
+	}
+
+	app.WaitForEnd()
 }

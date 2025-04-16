@@ -1,9 +1,9 @@
 package main
 
 const (
-	appName = "secret-sync"
+	appName = "Secret-sync"
 
-	loggingKeyAppName     = "app"
+	loggingKeyAppName     = "App"
 	loggingKeyError       = "err"
 	loggingKeySignal      = "signal"
 	loggingKeyAddr        = "addr"
@@ -14,6 +14,6 @@ const (
 	defaultRefreshIntervalSeconds = 30
 	defaultVaultAddr              = "http://vault-active.vault.svc.cluster.local:8200"
 
-	secretAnnotationKey  = "vault-sync-id" // nolint:gosec // This is not a credential
-	secretLabelManagedBy = "managed-by"
+	secretAnnotationSyncIdKey = "vault-sync-id" // nolint:gosec // This is not a credential
+	secretLabelManagedBy      = "managed-by"
 )
