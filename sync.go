@@ -103,16 +103,11 @@ func syncSecrets(
 	kubeClient kubernetes.Interface,
 	vaultClient vaulty.Client,
 	hashBucket cache.HashBucket,
-	interval *time.Duration,
+	interval time.Duration,
 	secrets []*Secret,
 ) web.AsyncTaskFunc {
 	return func(ctx context.Context) {
-		if interval == nil {
-			l.Error("Interval is nil")
-			return
-		}
-
-		ticker := time.NewTicker(*interval)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
 		for {
