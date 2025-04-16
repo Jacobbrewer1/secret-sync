@@ -56,15 +56,15 @@ func deletedSecretHandler(
 			return
 		}
 
+		if !hashBucket.InBucket(secret.Name) {
+			return
+		}
+
 		l = l.With(
 			slog.String(loggingKeyNamespace, secret.Namespace),
 			slog.String(loggingKeyDestination, secret.Name),
 		)
 		l.Debug("Secret deletion event received")
-
-		if !hashBucket.InBucket(secret.Name) {
-			return
-		}
 
 		// Check if the secret is a vault secret
 		if secret.Labels[secretLabelManagedBy] != appName {
