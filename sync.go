@@ -154,7 +154,7 @@ func syncSecrets(
 							}
 
 							l.Error("Error getting secret", slog.String(loggingKeyError, err.Error()))
-							return
+							continue
 						} else if foundSecret.Namespace != secret.DestinationNamespace { // nolint:revive // We need to check if the secret is in the correct namespace
 							l.Info("Secret exists in a different namespace", slog.String(loggingKeyNamespace, foundSecret.Namespace))
 

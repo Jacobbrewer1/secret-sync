@@ -1,7 +1,7 @@
 package main
 
 const (
-	appName = "Secret-sync"
+	appName = "secret-sync"
 
 	loggingKeyError       = "err"
 	loggingKeyNamespace   = "namespace"
