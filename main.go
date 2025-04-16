@@ -53,6 +53,7 @@ func (a *App) Start() error {
 			vip.OnConfigChange(func(e fsnotify.Event) {
 				a.base.Shutdown() // Restart the app on config change
 			})
+			go vip.WatchConfig()
 			return nil
 		}),
 		web.WithDependencyBootstrap(func(ctx context.Context) error {
@@ -80,24 +81,16 @@ func (a *App) Start() error {
 				return errors.New("invalid refresh interval")
 			}
 
+			a.base.Logger().Info("Interval set", slog.String(loggingKeyInterval, interval.String()))
+
 			a.config.syncInterval = interval
 			return nil
 		}),
-		web.WithIndefiniteAsyncTask("watch-secrets", watchSecrets(
+		web.WithIndefiniteAsyncTask("watch-secrets", a.watchSecrets(
 			logging.LoggerWithComponent(a.base.Logger(), "watch-secrets"),
-			a.base.KubeClient(),
-			a.base.SecretInformer(),
-			a.base.VaultClient(),
-			a.base.ServiceEndpointHashBucket(),
-			a.config.Secrets,
 		)),
-		web.WithIndefiniteAsyncTask("sync-secrets", syncSecrets(
+		web.WithIndefiniteAsyncTask("sync-secrets", a.syncSecretsTicker(
 			logging.LoggerWithComponent(a.base.Logger(), "sync-secrets"),
-			a.base.KubeClient(),
-			a.base.VaultClient(),
-			a.base.ServiceEndpointHashBucket(),
-			a.config.syncInterval,
-			a.config.Secrets,
 		)),
 	); err != nil {
 		return fmt.Errorf("failed to start web app: %w", err)
