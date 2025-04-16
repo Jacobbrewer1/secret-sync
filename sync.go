@@ -53,7 +53,6 @@ func deletedSecretHandler(
 		}
 
 		if !hashBucket.InBucket(secret.Name) {
-			l.Debug("Secret not in bucket", slog.String("name", secret.Name)) // TODO: Remove this
 			return
 		}
 
@@ -91,7 +90,7 @@ func deletedSecretHandler(
 		}
 
 		// Upsert the secret
-		if err := foundSecret.Upsert(ctx, kubeClient, vaultSecret.Data); err != nil {
+		if err := foundSecret.Upsert(ctx, kubeClient, vaultSecret.Data); err != nil { // nolint:revive // Traditional error handling
 			l.Error("Error upserting secret", slog.String(loggingKeyError, err.Error()))
 			return
 		}
@@ -100,83 +99,85 @@ func deletedSecretHandler(
 
 // All secrets will have the annotation of "vault-sync-id=hash" where hash is the hash of the path.
 func syncSecrets(
-	ctx context.Context,
 	l *slog.Logger,
 	kubeClient kubernetes.Interface,
 	vaultClient vaulty.Client,
 	hashBucket cache.HashBucket,
 	interval time.Duration,
 	secrets []*Secret,
-) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+) web.AsyncTaskFunc {
+	return func(ctx context.Context) {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
 
-	for {
-		select {
-		case <-ctx.Done():
-			l.Info("Stopping secret sync")
-			return
-		case <-ticker.C:
-			namespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-			if err != nil {
-				l.Error("Error listing namespaces", slog.String(loggingKeyError, err.Error()))
-				continue
-			}
-
-			for _, secret := range secrets {
-				if !hashBucket.InBucket(secret.DestinationName) {
-					l.Debug("Secret not in bucket", slog.String("name", secret.DestinationName)) // TODO: Remove this
+		for {
+			select {
+			case <-ctx.Done():
+				l.Info("Stopping secret sync")
+				return
+			case <-ticker.C:
+				namespaces, err := kubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+				if err != nil {
+					l.Error("Error listing namespaces", slog.String(loggingKeyError, err.Error()))
 					continue
 				}
 
-				l = l.With(
-					slog.String(loggingKeyNamespace, secret.DestinationNamespace),
-					slog.String(loggingKeyDestination, secret.DestinationName),
-				)
+				for _, secret := range secrets {
+					if !hashBucket.InBucket(secret.DestinationName) {
+						continue
+					}
 
-				if err := secret.Valid(); err != nil {
-					l.Error("Invalid secret", slog.String(loggingKeyError, err.Error()))
-					continue
-				}
+					l = l.With(
+						slog.String(loggingKeyNamespace, secret.DestinationNamespace),
+						slog.String(loggingKeyDestination, secret.DestinationName),
+					)
 
-				for _, ns := range namespaces.Items {
-					// Does the secret exist in this namespace?
-					foundSecret, err := kubeClient.CoreV1().Secrets(ns.Name).Get(ctx, secret.DestinationName, metav1.GetOptions{
-						TypeMeta: metav1.TypeMeta{
-							Kind: "Secret",
-						},
-					})
-					if err != nil {
-						newErr := new(coreErr.StatusError)
-						if errors.As(err, &newErr) && newErr.ErrStatus.Reason == metav1.StatusReasonNotFound { // nolint:revive // We need to cast see if the error is a StatusError before we can check the reason
-							// Secret does not exist in this namespace
-							continue
-						}
+					if err := secret.Valid(); err != nil {
+						l.Error("Invalid secret", slog.String(loggingKeyError, err.Error()))
+						continue
+					}
 
-						l.Error("Error getting secret", slog.String(loggingKeyError, err.Error()))
-						return
-					} else if foundSecret.Namespace != secret.DestinationNamespace {
-						l.Info("Secret exists in a different namespace", slog.String(loggingKeyNamespace, foundSecret.Namespace))
+					for i := range namespaces.Items {
+						ns := &namespaces.Items[i]
 
-						// Delete the secret
-						if err := kubeClient.CoreV1().Secrets(ns.Name).Delete(ctx, foundSecret.Namespace, metav1.DeleteOptions{}); err != nil {
-							l.Error("Error deleting secret", slog.String(loggingKeyError, err.Error()))
+						// Does the secret exist in this namespace?
+						foundSecret, err := kubeClient.CoreV1().Secrets(ns.Name).Get(ctx, secret.DestinationName, metav1.GetOptions{
+							TypeMeta: metav1.TypeMeta{
+								Kind: "Secret",
+							},
+						})
+						if err != nil {
+							newErr := new(coreErr.StatusError)
+							if errors.As(err, &newErr) && newErr.ErrStatus.Reason == metav1.StatusReasonNotFound { // nolint:revive // We need to cast see if the error is a StatusError before we can check the reason
+								// Secret does not exist in this namespace
+								continue
+							}
+
+							l.Error("Error getting secret", slog.String(loggingKeyError, err.Error()))
 							return
+						} else if foundSecret.Namespace != secret.DestinationNamespace { // nolint:revive // We need to check if the secret is in the correct namespace
+							l.Info("Secret exists in a different namespace", slog.String(loggingKeyNamespace, foundSecret.Namespace))
+
+							// Delete the secret
+							if err := kubeClient.CoreV1().Secrets(ns.Name).Delete(ctx, foundSecret.Namespace, metav1.DeleteOptions{}); err != nil { // nolint:revive // Traditional error handling
+								l.Error("Error deleting secret", slog.String(loggingKeyError, err.Error()))
+								return
+							}
 						}
 					}
-				}
 
-				// Get the secret from vault
-				vaultSecret, err := vaultClient.Path(secret.Path).GetKvSecretV2(ctx)
-				if err != nil {
-					l.Error("Error getting secret from vault", slog.String(loggingKeyError, err.Error()))
-					continue
-				}
+					// Get the secret from vault
+					vaultSecret, err := vaultClient.Path(secret.Path).GetKvSecretV2(ctx)
+					if err != nil {
+						l.Error("Error getting secret from vault", slog.String(loggingKeyError, err.Error()))
+						continue
+					}
 
-				// Upsert the secret
-				if err := secret.Upsert(ctx, kubeClient, vaultSecret.Data); err != nil {
-					l.Error("Error upserting secret", slog.String(loggingKeyError, err.Error()))
-					continue
+					// Upsert the secret
+					if err := secret.Upsert(ctx, kubeClient, vaultSecret.Data); err != nil { // nolint:revive // Traditional error handling
+						l.Error("Error upserting secret", slog.String(loggingKeyError, err.Error()))
+						continue
+					}
 				}
 			}
 		}

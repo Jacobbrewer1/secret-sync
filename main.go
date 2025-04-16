@@ -91,6 +91,14 @@ func (a *App) Start() error {
 			a.base.ServiceEndpointHashBucket(),
 			a.config.Secrets,
 		)),
+		web.WithIndefiniteAsyncTask("sync-secrets", syncSecrets(
+			logging.LoggerWithComponent(a.base.Logger(), "sync-secrets"),
+			a.base.KubeClient(),
+			a.base.VaultClient(),
+			a.base.ServiceEndpointHashBucket(),
+			a.config.syncInterval,
+			a.config.Secrets,
+		)),
 	); err != nil {
 		return fmt.Errorf("failed to start web app: %w", err)
 	}
@@ -113,8 +121,7 @@ func main() {
 		panic("failed to create app")
 	}
 
-	err = app.Start()
-	if err != nil {
+	if err := app.Start(); err != nil {
 		l.Error("failed to start app", slog.Any(logging.KeyError, err))
 		panic("failed to start app")
 	}
