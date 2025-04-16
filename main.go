@@ -16,7 +16,7 @@ import (
 type (
 	AppConfig struct {
 		Secrets      []*Secret
-		syncInterval time.Duration
+		syncInterval *time.Duration
 	}
 
 	App struct {
@@ -82,7 +82,7 @@ func (a *App) Start() error {
 
 			a.base.Logger().Info("Interval set", slog.String(loggingKeyInterval, interval.String()))
 
-			a.config.syncInterval = interval
+			a.config.syncInterval = &interval
 			return nil
 		}),
 		web.WithIndefiniteAsyncTask("watch-secrets", watchSecrets(
