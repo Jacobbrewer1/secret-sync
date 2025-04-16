@@ -56,6 +56,12 @@ func deletedSecretHandler(
 			return
 		}
 
+		l = l.With(
+			slog.String(loggingKeyNamespace, secret.Namespace),
+			slog.String(loggingKeyDestination, secret.Name),
+		)
+		l.Debug("Secret deletion event received")
+
 		if !hashBucket.InBucket(secret.Name) {
 			return
 		}
