@@ -87,7 +87,7 @@ func deletedSecretHandler(
 		}
 
 		// Get the secret from vault
-		vaultSecret, err := vaultClient.Path(foundSecret.Path).GetKvSecretV2(ctx)
+		vaultSecret, err := vaultClient.Path(foundSecret.Name).GetKvSecretV2(ctx)
 		if err != nil {
 			l.Error("Error getting secret from vault", slog.String(loggingKeyError, err.Error()))
 			return
@@ -188,7 +188,10 @@ func syncSecrets(
 		}
 
 		// Get the secret from vault
-		vaultSecret, err := vaultClient.Path(secret.Path).GetKvSecretV2(ctx)
+		vaultSecret, err := vaultClient.Path(
+			secret.Name,
+			vaulty.WithMount(secret.Mount),
+		).GetKvSecretV2(ctx)
 		if err != nil {
 			l.Error("Error getting secret from vault", slog.String(loggingKeyError, err.Error()))
 			continue

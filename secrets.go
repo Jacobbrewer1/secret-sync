@@ -12,31 +12,26 @@ import (
 )
 
 var (
-	ErrNoPath                 = errors.New("path is required")
+	ErrNoMount                = errors.New("mount is required")
+	ErrNoName                 = errors.New("name is required")
 	ErrNoDestinationNamespace = errors.New("destination_namespace is required")
 	ErrNoDestinationName      = errors.New("destination_name is required")
 )
 
 type Secret struct {
-	Path                 string            `mapstructure:"path"`
+	Mount                string            `mapstructure:"mount"`
+	Name                 string            `mapstructure:"path"`
 	DestinationNamespace string            `mapstructure:"destination_namespace"`
 	DestinationName      string            `mapstructure:"destination_name"`
 	Type                 corev1.SecretType `mapstructure:"type"` // Should be a Kubernetes Secret type
 }
 
-func NewSecret(path, destinationNamespace, destinationName string, secretType corev1.SecretType) *Secret {
-	return &Secret{
-		Path:                 path,
-		DestinationNamespace: destinationNamespace,
-		DestinationName:      destinationName,
-		Type:                 secretType,
-	}
-}
-
 func (s *Secret) Valid() error {
 	switch {
-	case s.Path == "":
-		return ErrNoPath
+	case s.Mount == "":
+		return ErrNoMount
+	case s.Name == "":
+		return ErrNoName
 	case s.DestinationNamespace == "":
 		return ErrNoDestinationNamespace
 	case s.DestinationName == "":

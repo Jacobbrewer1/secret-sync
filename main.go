@@ -53,6 +53,7 @@ func (a *App) Start() error {
 			vip.OnConfigChange(func(e fsnotify.Event) {
 				a.base.Shutdown() // Restart the app on config change
 			})
+			go vip.WatchConfig()
 			return nil
 		}),
 		web.WithDependencyBootstrap(func(ctx context.Context) error {
