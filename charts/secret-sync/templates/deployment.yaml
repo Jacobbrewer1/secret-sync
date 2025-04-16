@@ -45,8 +45,6 @@ spec:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
-          args:
-            - "--config=/tmp/config/config.json"
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:
@@ -61,6 +59,8 @@ spec:
           env:
             - name: "KUBERNETES_ROLE"
               value: {{ include "secret-sync.serviceAccountName" . }}
+            - name: "CONFIG_LOCATION"
+              value: "/tmp/config/config.json"
       volumes:
         - name: {{ include "secret-sync.name" . }}-config-volume
           configMap:
