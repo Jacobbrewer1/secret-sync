@@ -75,6 +75,10 @@ func (s *Secret) Upsert(ctx context.Context, kubeClient kubernetes.Interface, va
 		}
 	}
 
+	if len(newSecret.Data) == 0 {
+		return errors.New("no data found in secret")
+	}
+
 	// Add an annotation with the hash of the Secret
 	hashBytes, err := json.Marshal(newSecret)
 	if err != nil {
