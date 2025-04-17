@@ -85,7 +85,7 @@ func (s *Secret) Upsert(ctx context.Context, kubeClient kubernetes.Interface, va
 			Kind: "Secret",
 		},
 	})
-	if kubeErr.IsNotFound(err) {
+	if err != nil && kubeErr.IsNotFound(err) {
 		// Try to create the Secret first
 		_, err = kubeClient.CoreV1().Secrets(s.DestinationNamespace).Create(ctx, newSecret, metav1.CreateOptions{})
 		if err != nil {
@@ -96,10 +96,15 @@ func (s *Secret) Upsert(ctx context.Context, kubeClient kubernetes.Interface, va
 		return fmt.Errorf("error getting existing secret: %w", err)
 	}
 
-	if existingSecret.Labels[secretLabelManagedBy] != appName {
+	if existingSecret.Labels == nil {
+		existingSecret.Labels = make(map[string]string)
+	} else if existingSecret.Labels[secretLabelManagedBy] != appName {
 		return fmt.Errorf("secret %s/%s is not managed by %s", s.DestinationNamespace, s.DestinationName, appName)
 	}
-	if existingSecret.Annotations[secretAnnotationSyncIdKey] == hash {
+
+	if existingSecret.Annotations == nil {
+		existingSecret.Annotations = make(map[string]string)
+	} else if existingSecret.Annotations[secretAnnotationSyncIdKey] == hash {
 		// The secret already exists and is up to date
 		return nil
 	}
