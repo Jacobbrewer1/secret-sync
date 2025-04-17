@@ -34,6 +34,9 @@ import (
 const (
 	MetricsPort = 9090
 	HealthPort  = 9091
+
+	httpReadHeaderTimeout = 10 * time.Second
+	shutdownTimeout       = 15 * time.Second
 )
 
 var (
@@ -42,19 +45,15 @@ var (
 )
 
 type (
+	// AppConfig is the configuration for the application.
 	AppConfig struct {
 		ConfigLocation string `env:"CONFIG_LOCATION" envDefault:"config.json"`
 	}
 
+	// App is the application struct.
 	App struct {
 		// l is the logger for the application.
 		l *slog.Logger
-
-		// baseCfg is the base configuration for the application.
-		baseCfg *AppConfig
-
-		// vaultClient is the vault client for the application.
-		vaultClient vaulty.Client
 
 		// baseCtx is the base context for the application.
 		baseCtx context.Context
@@ -62,14 +61,29 @@ type (
 		// baseCtxCancel is the base context cancel function.
 		baseCtxCancel context.CancelFunc
 
+		// baseCfg is the base configuration for the application.
+		baseCfg *AppConfig
+
+		// isStarted a channel that is closed when the application is started.
+		isStartedChan chan struct{}
+
+		// startOnce is used to ensure that the start function is only called once.
+		startOnce sync.Once
+
 		// vip is the viper instance for the application.
 		vip *viper.Viper
+
+		// vaultClient is the vault client for the application.
+		vaultClient vaulty.Client
 
 		// metricsEnabled is a flag to enable metrics for the application.
 		metricsEnabled bool
 
 		// servers is the list of servers for the application.
 		servers sync.Map
+
+		// shutdownOnce is used to ensure that the shutdown function is only called once.
+		shutdownOnce sync.Once
 
 		// shutdownWg is used to wait for all shutdown tasks to complete.
 		shutdownWg *sync.WaitGroup
@@ -137,86 +151,98 @@ func NewApp(l *slog.Logger) (*App, error) {
 		return nil, fmt.Errorf("failed to parse app config: %w", err)
 	}
 
-	vip := viper.New()
-	vip.SetConfigFile(baseCfg.ConfigLocation)
-	if err := vip.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("error reading config file: %w", err)
-	}
-
 	return &App{
 		l:              l,
 		baseCfg:        baseCfg,
 		baseCtx:        baseCtx,
 		baseCtxCancel:  baseCtxCancel,
-		vip:            vip,
+		isStartedChan:  make(chan struct{}),
 		metricsEnabled: true,
 		shutdownWg:     new(sync.WaitGroup),
 	}, nil
 }
 
 // Start starts the application and applies the given options.
+//
+// Note: This function is thread-safe. If the function is called from multiple threads, the function will only be
+// executed once; however the function will block all calling threads until the startup is complete.
+//
+// If the function returns an error, the application will be shut down.
 func (a *App) Start(opts ...StartOption) error {
-	a.l.Info("starting application",
-		slog.String(logging.KeyGitCommit, utils.GitCommit()),
-		slog.String(logging.KeyRuntime, fmt.Sprintf("%s %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH)),
-		slog.String(logging.KeyBuildDate, utils.CommitTimestamp().String()),
-	)
+	var startErr error
+	a.startOnce.Do(func() {
+		defer close(a.isStartedChan)
 
-	for _, opt := range opts {
-		if err := opt(a); err != nil {
-			return fmt.Errorf("failed to apply option: %w", err)
+		a.l.Info("starting application",
+			slog.String(logging.KeyGitCommit, utils.GitCommit()),
+			slog.String(logging.KeyRuntime, fmt.Sprintf("%s %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH)),
+			slog.String(logging.KeyBuildDate, utils.CommitTimestamp().String()),
+		)
+
+		for _, opt := range opts {
+			if err := opt(a); err != nil { // nolint:revive // Traditional error handling
+				startErr = fmt.Errorf("failed to apply option: %w", err)
+				return
+			}
 		}
-	}
 
-	if a.metricsEnabled {
-		metricsRouter := mux.NewRouter()
-		metricsRouter.Handle("/metrics", promhttp.Handler())
-		a.servers.Store("metrics", &http.Server{
-			Addr:              fmt.Sprintf(":%d", MetricsPort),
-			Handler:           metricsRouter,
-			ReadHeaderTimeout: 10 * time.Second,
+		if a.metricsEnabled {
+			metricsRouter := mux.NewRouter()
+			metricsRouter.Handle("/metrics", promhttp.Handler())
+			a.servers.Store("metrics", &http.Server{
+				Addr:              fmt.Sprintf(":%d", MetricsPort),
+				Handler:           metricsRouter,
+				ReadHeaderTimeout: httpReadHeaderTimeout,
+			})
+		}
+
+		if a.leaderElection != nil {
+			go a.leaderElection.Run(a.baseCtx)
+		}
+
+		a.servers.Range(func(name, srv any) bool {
+			serverName, ok := name.(string)
+			if !ok {
+				a.l.Error("failed to cast server name to string")
+				return false
+			}
+
+			server, ok := srv.(*http.Server)
+			if !ok {
+				a.l.Error("failed to cast server to http.Server")
+				return false
+			}
+
+			a.startServer(serverName, server)
+			return true
 		})
-	}
 
-	if a.leaderElection != nil {
-		go a.leaderElection.Run(a.baseCtx)
-	}
+		a.indefiniteAsyncTasks.Range(func(name, fn any) bool {
+			taskName, ok := name.(string)
+			if !ok {
+				a.l.Error("failed to cast task name to string")
+				return false
+			}
 
-	a.servers.Range(func(name, srv any) bool {
-		serverName, ok := name.(string)
-		if !ok {
-			a.l.Error("failed to cast server name to string")
-			return false
-		}
+			taskFn, ok := fn.(AsyncTaskFunc)
+			if !ok {
+				a.l.Error("failed to cast task function to AsyncTaskFunc")
+				return false
+			}
 
-		server, ok := srv.(*http.Server)
-		if !ok {
-			a.l.Error("failed to cast server to http.Server")
-			return false
-		}
-
-		a.startServer(serverName, server)
-		return true
+			a.startAsyncTask(taskName, true, taskFn)
+			return true
+		})
 	})
 
-	a.indefiniteAsyncTasks.Range(func(name, fn any) bool {
-		taskName, ok := name.(string)
-		if !ok {
-			a.l.Error("failed to cast task name to string")
-			return false
-		}
+	a.waitUntilStarted()
 
-		taskFn, ok := fn.(AsyncTaskFunc)
-		if !ok {
-			a.l.Error("failed to cast task function to AsyncTaskFunc")
-			return false
-		}
+	if startErr != nil {
+		a.l.Error("error detected in application startup", slog.String(logging.KeyError, startErr.Error()))
+		go a.Shutdown()
+	}
 
-		a.startAsyncTask(taskName, true, taskFn)
-		return true
-	})
-
-	return nil
+	return startErr
 }
 
 // startServer starts the given server.
@@ -241,6 +267,11 @@ func (a *App) ChildContext() (context.Context, context.CancelFunc) {
 	return context.WithCancel(a.baseCtx)
 }
 
+// TimeoutContext returns a child context of the base context with a timeout.
+func (a *App) TimeoutContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(a.baseCtx, timeout)
+}
+
 // WaitForEnd waits for the application to complete, either normally or via an interrupt signal.
 func (a *App) WaitForEnd(onEnd ...func()) {
 	<-a.baseCtx.Done()
@@ -251,78 +282,110 @@ func (a *App) WaitForEnd(onEnd ...func()) {
 }
 
 // Shutdown stops the application.
+//
+// Note: This function is not thread-safe. If the function is called from multiple threads, the function is only
+// executed once; however the function will block all calling threads until the shutdown is complete.
 func (a *App) Shutdown() {
-	if a.baseCtxCancel != nil {
-		a.baseCtxCancel()
-	}
-
-	ctx, cancel := context.WithTimeout(a.baseCtx, 15*time.Second)
-	defer cancel()
-
-	a.servers.Range(func(name, srv any) bool {
-		server, ok := srv.(*http.Server)
-		if !ok {
-			a.l.Error("failed to cast server to http.Server")
-			return false
+	a.shutdownOnce.Do(func() {
+		if a.baseCtxCancel != nil {
+			a.baseCtxCancel()
 		}
 
-		nameStr, ok := name.(string)
-		if !ok {
-			a.l.Warn("failed to cast server name to string")
-			nameStr = "unknown"
+		ctx, cancel := context.WithTimeout(a.baseCtx, shutdownTimeout)
+		defer cancel()
+
+		a.servers.Range(func(name, srv any) bool {
+			server, ok := srv.(*http.Server)
+			if !ok {
+				a.l.Error("failed to cast server to http.Server")
+				return false
+			}
+
+			nameStr, ok := name.(string)
+			if !ok {
+				a.l.Warn("failed to cast server name to string")
+				nameStr = "unknown"
+			}
+
+			if err := server.Shutdown(ctx); err != nil {
+				a.l.Error("failed to shutdown server",
+					slog.String(logging.KeyServer, nameStr),
+					slog.Any(logging.KeyError, err),
+				)
+			}
+
+			return true
+		})
+
+		if a.db != nil {
+			if err := a.db.Close(); err != nil {
+				a.l.Error("failed to close database", slog.Any(logging.KeyError, err))
+			}
 		}
 
-		if err := server.Shutdown(ctx); err != nil {
-			a.l.Error("failed to shutdown server",
-				slog.String(logging.KeyServer, nameStr),
-				slog.Any(logging.KeyError, err),
-			)
+		if a.redisPool != nil {
+			if err := a.redisPool.Conn().Close(); err != nil {
+				a.l.Error("failed to close redis pool", slog.Any(logging.KeyError, err))
+			}
 		}
 
-		return true
+		if a.serviceEndpointHashBucket != nil {
+			a.serviceEndpointHashBucket.Shutdown()
+		}
+
+		if a.workerPool != nil {
+			a.workerPool.Stop()
+		}
+
+		if a.natsClient != nil {
+			a.natsClient.Close()
+		}
 	})
-
-	if a.db != nil {
-		if err := a.db.Close(); err != nil {
-			a.l.Error("failed to close database", slog.Any(logging.KeyError, err))
-		}
-	}
-
-	if a.redisPool != nil {
-		if err := a.redisPool.Conn().Close(); err != nil {
-			a.l.Error("failed to close redis pool", slog.Any(logging.KeyError, err))
-		}
-	}
-
-	if a.workerPool != nil {
-		a.workerPool.Stop()
-	}
 
 	a.shutdownWg.Wait()
 }
 
 // Logger returns the logger for the application.
 func (a *App) Logger() *slog.Logger {
+	if a.l == nil {
+		panic("logger has not been registered")
+	}
 	return a.l
 }
 
 // VaultClient returns the vault client for the application.
 func (a *App) VaultClient() vaulty.Client {
+	if a.vaultClient == nil {
+		a.l.Error("vault client has not been registered")
+		panic("vault client has not been registered")
+	}
 	return a.vaultClient
 }
 
 // Viper returns the viper instance for the application.
 func (a *App) Viper() *viper.Viper {
+	if a.vip == nil {
+		a.l.Error("viper instance has not been registered")
+		panic("viper instance has not been registered")
+	}
 	return a.vip
 }
 
 // DBConn returns the database connection for the application.
 func (a *App) DBConn() *repositories.Database {
+	if a.db == nil {
+		a.l.Error("database connection has not been registered")
+		panic("database connection has not been registered")
+	}
 	return a.db
 }
 
 // KubeClient returns the Kubernetes client for the application.
 func (a *App) KubeClient() kubernetes.Interface {
+	if a.kubeClient == nil {
+		a.l.Error("kubernetes client has not been registered")
+		panic("kubernetes client has not been registered")
+	}
 	return a.kubeClient
 }
 
@@ -334,10 +397,9 @@ func (a *App) Done() <-chan struct{} {
 // IsLeader returns true if the application is the leader.
 func (a *App) IsLeader() bool {
 	if a.leaderElection == nil {
-		a.l.Info("leader election not set, assuming leader")
+		a.l.Debug("leader election not set, assuming leader")
 		return true
 	}
-
 	return a.leaderElection.IsLeader()
 }
 
@@ -380,7 +442,7 @@ func (a *App) startAsyncTask(name string, indefinite bool, fn AsyncTaskFunc) {
 		// If task is configured as indefinite and the task stops before we stop running the entire app, close the app down
 		// with an error.
 		if indefinite && !errors.Is(a.baseCtx.Err(), context.Canceled) { // nolint:revive // Traditional error handling
-			a.l.Warn("indefinite async task closed before app shutdown",
+			a.l.Error("indefinite async task closed before app shutdown",
 				slog.String(logging.KeyName, name),
 			)
 			a.baseCtxCancel()
@@ -390,26 +452,46 @@ func (a *App) startAsyncTask(name string, indefinite bool, fn AsyncTaskFunc) {
 
 // RedisPool returns the redis pool for the application.
 func (a *App) RedisPool() goredis.Pool {
+	if a.redisPool == nil {
+		a.l.Error("redis pool has not been registered")
+		panic("redis pool has not been registered")
+	}
 	return a.redisPool
 }
 
 // WorkerPool returns the worker pool for the application.
 func (a *App) WorkerPool() workerpool.Pool {
+	if a.workerPool == nil {
+		a.l.Error("worker pool has not been registered")
+		panic("worker pool has not been registered")
+	}
 	return a.workerPool
 }
 
 // NatsClient returns the NATS client for the application.
 func (a *App) NatsClient() *nats.Conn {
+	if a.natsClient == nil {
+		a.l.Error("nats client has not been registered")
+		panic("nats client has not been registered")
+	}
 	return a.natsClient
 }
 
 // NatsJetStream returns the JetStream stream for the application.
 func (a *App) NatsJetStream() jetstream.JetStream {
+	if a.natsJetStream == nil {
+		a.l.Error("nats jetstream has not been registered")
+		panic("nats jetstream has not been registered")
+	}
 	return a.natsJetStream
 }
 
 // NatsStream returns the NATS stream for the application.
 func (a *App) NatsStream() jetstream.Stream {
+	if a.natsStream == nil {
+		a.l.Error("nats stream has not been registered")
+		panic("nats stream has not been registered")
+	}
 	return a.natsStream
 }
 
@@ -434,30 +516,62 @@ func (a *App) CreateNatsJetStreamConsumer(consumerName, subjectFilter string) (j
 
 // ServiceEndpointHashBucket returns the service endpoint hash bucket for the application.
 func (a *App) ServiceEndpointHashBucket() *cache.ServiceEndpointHashBucket {
+	if a.serviceEndpointHashBucket == nil {
+		a.l.Error("service endpoint hash bucket has not been registered")
+		panic("service endpoint hash bucket has not been registered")
+	}
 	return a.serviceEndpointHashBucket
 }
 
 // PodLister returns the pod lister for the application.
 func (a *App) PodLister() listersv1.PodLister {
+	if a.podLister == nil {
+		a.l.Error("pod lister has not been registered")
+		panic("pod lister has not been registered")
+	}
 	return a.podLister
 }
 
 // PodInformer returns the pod informer for the application.
 func (a *App) PodInformer() kubeCache.SharedIndexInformer {
+	if a.podInformer == nil {
+		a.l.Error("pod informer has not been registered")
+		panic("pod informer has not been registered")
+	}
 	return a.podInformer
 }
 
 // KubernetesInformerFactory returns the Kubernetes informer factory for the application.
 func (a *App) KubernetesInformerFactory() informers.SharedInformerFactory {
+	if a.kubernetesInformerFactory == nil {
+		a.l.Error("kubernetes informer factory has not been registered")
+		panic("kubernetes informer factory has not been registered")
+	}
 	return a.kubernetesInformerFactory
 }
 
 // SecretLister returns the secret lister for the application.
 func (a *App) SecretLister() listersv1.SecretLister {
+	if a.secretLister == nil {
+		a.l.Error("secret lister has not been registered")
+		panic("secret lister has not been registered")
+	}
 	return a.secretLister
 }
 
 // SecretInformer returns the secret informer for the application.
 func (a *App) SecretInformer() kubeCache.SharedIndexInformer {
+	if a.secretInformer == nil {
+		a.l.Error("secret informer has not been registered")
+		panic("secret informer has not been registered")
+	}
 	return a.secretInformer
+}
+
+func (a *App) waitUntilStarted() {
+	if a.isStartedChan == nil {
+		a.l.Error("isStartedChan has not been registered")
+		panic("isStartedChan has not been registered")
+	}
+	<-a.isStartedChan
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	kubeErr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -75,25 +76,39 @@ func (s *Secret) Upsert(ctx context.Context, kubeClient kubernetes.Interface, va
 	hash := shaHash(hashBytes)
 	newSecret.Annotations[secretAnnotationSyncIdKey] = hash
 
-	// Try to create the Secret first
-	_, err = kubeClient.CoreV1().Secrets(s.DestinationNamespace).Create(ctx, newSecret, metav1.CreateOptions{})
-	if err == nil {
+	// Does the secret already exist?
+	existingSecret, err := kubeClient.CoreV1().Secrets(s.DestinationNamespace).Get(ctx, s.DestinationName, metav1.GetOptions{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "Secret",
+		},
+	})
+	if err != nil && !kubeErr.IsNotFound(err) {
+		return fmt.Errorf("error getting existing secret: %w", err)
+	} else if existingSecret != nil {
+		if existingSecret.Labels[secretLabelManagedBy] != appName {
+			return fmt.Errorf("secret %s/%s is not managed by %s", s.DestinationNamespace, s.DestinationName, appName)
+		}
+		if existingSecret.Annotations[secretAnnotationSyncIdKey] == hash {
+			// The secret already exists and is up to date
+			return nil
+		}
+
+		existingSecret.Labels = newSecret.Labels
+		existingSecret.Annotations = newSecret.Annotations
+		existingSecret.Type = newSecret.Type
+		existingSecret.Data = newSecret.Data
+
+		_, err = kubeClient.CoreV1().Secrets(s.DestinationNamespace).Update(ctx, existingSecret, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("error updating secret: %w", err)
+		}
 		return nil
 	}
 
-	// If creation failed, try to update the existing Secret
-	existingSecret, err := kubeClient.CoreV1().Secrets(s.DestinationNamespace).Get(ctx, s.DestinationName, metav1.GetOptions{})
+	// Try to create the Secret first
+	_, err = kubeClient.CoreV1().Secrets(s.DestinationNamespace).Create(ctx, newSecret, metav1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("error getting existing secret: %w", err)
-	}
-
-	existingSecret.Labels = newSecret.Labels
-	existingSecret.Annotations = newSecret.Annotations
-	existingSecret.Type = newSecret.Type
-
-	_, err = kubeClient.CoreV1().Secrets(s.DestinationNamespace).Update(ctx, existingSecret, metav1.UpdateOptions{})
-	if err != nil {
-		return fmt.Errorf("error updating secret: %w", err)
+		return fmt.Errorf("error creating secret: %w", err)
 	}
 
 	return nil

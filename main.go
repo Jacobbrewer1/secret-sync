@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v10"
-	"github.com/fsnotify/fsnotify"
 	"github.com/jacobbrewer1/web"
 	"github.com/jacobbrewer1/web/logging"
 )
@@ -44,18 +43,14 @@ func NewApp(l *slog.Logger) (*App, error) {
 
 func (a *App) Start() error {
 	if err := a.base.Start(
+		web.WithViperConfig(),
+		web.WithConfigWatchers(func() {
+			a.base.Shutdown()
+		}),
 		web.WithVaultClient(),
 		web.WithInClusterKubeClient(),
 		web.WithKubernetesSecretInformer(),
 		web.WithServiceEndpointHashBucket(appName),
-		web.WithDependencyBootstrap(func(ctx context.Context) error {
-			vip := a.base.Viper()
-			vip.OnConfigChange(func(e fsnotify.Event) {
-				a.base.Shutdown() // Restart the app on config change
-			})
-			go vip.WatchConfig()
-			return nil
-		}),
 		web.WithDependencyBootstrap(func(ctx context.Context) error {
 			vip := a.base.Viper()
 			secrets := make([]*Secret, 0)
