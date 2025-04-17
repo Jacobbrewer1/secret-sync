@@ -107,8 +107,8 @@ func (s *Secret) Upsert(ctx context.Context, kubeClient kubernetes.Interface, va
 
 	// Try to create the Secret first
 	_, err = kubeClient.CoreV1().Secrets(s.DestinationNamespace).Create(ctx, newSecret, metav1.CreateOptions{})
-	if err == nil {
-		return nil
+	if err != nil {
+		return fmt.Errorf("error creating secret: %w", err)
 	}
 
 	return nil
