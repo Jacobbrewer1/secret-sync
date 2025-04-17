@@ -61,6 +61,8 @@ spec:
               value: {{ include "secret-sync.serviceAccountName" . }}
             - name: "CONFIG_LOCATION"
               value: "/tmp/config/config.json"
+            - name: "LOG_LEVEL"
+              value: {{ .Values.logLevel | quote }}
       volumes:
         - name: {{ include "secret-sync.name" . }}-config-volume
           configMap:

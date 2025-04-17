@@ -104,3 +104,12 @@ refreshInterval: 30
 vaultAddress: "http://vault-active.vault:8200"
 
 vaultSecrets: []
+
+logLevel: "info"
+  # This is the log level for the application. It can be set to "debug", "info", "warn", "error", or "fatal".
+  # The default is "info". The log level can be set to any of the following values:
+  # - debug
+  # - info
+  # - warn
+  # - error
+  # - fatal
