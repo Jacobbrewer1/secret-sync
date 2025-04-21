@@ -124,6 +124,9 @@ type (
 		// indefiniteAsyncTasks is the list of indefinite async tasks for the application.
 		indefiniteAsyncTasks sync.Map
 
+		// fixedHashBucket is the fixed hash bucket for the application.
+		fixedHashBucket *cache.FixedHashBucket
+
 		// serviceEndpointHashBucket is the service endpoint hash bucket for the application.
 		serviceEndpointHashBucket *cache.ServiceEndpointHashBucket
 
@@ -200,39 +203,49 @@ func (a *App) Start(opts ...StartOption) error {
 			go a.leaderElection.Run(a.baseCtx)
 		}
 
+		var serverErr error
 		a.servers.Range(func(name, srv any) bool {
 			serverName, ok := name.(string)
 			if !ok {
-				a.l.Error("failed to cast server name to string")
+				serverErr = errors.New("failed to cast server name to string")
 				return false
 			}
 
 			server, ok := srv.(*http.Server)
 			if !ok {
-				a.l.Error("failed to cast server to http.Server")
+				serverErr = fmt.Errorf("failed to cast server %s to http.Server", serverName)
 				return false
 			}
 
 			a.startServer(serverName, server)
 			return true
 		})
+		if serverErr != nil {
+			startErr = fmt.Errorf("server initialization error: %w", serverErr)
+			return
+		}
 
+		var taskErr error
 		a.indefiniteAsyncTasks.Range(func(name, fn any) bool {
 			taskName, ok := name.(string)
 			if !ok {
-				a.l.Error("failed to cast task name to string")
+				taskErr = errors.New("failed to cast task name to string")
 				return false
 			}
 
 			taskFn, ok := fn.(AsyncTaskFunc)
 			if !ok {
-				a.l.Error("failed to cast task function to AsyncTaskFunc")
+				taskErr = fmt.Errorf("failed to cast task function %s to AsyncTaskFunc", taskName)
 				return false
 			}
 
 			a.startAsyncTask(taskName, true, taskFn)
 			return true
 		})
+		if taskErr != nil { // nolint:revive // Traditional error handling
+			startErr = fmt.Errorf("async task initialization error: %w", taskErr)
+			return
+		}
 	})
 
 	a.waitUntilStarted()
@@ -512,6 +525,15 @@ func (a *App) CreateNatsJetStreamConsumer(consumerName, subjectFilter string) (j
 	}
 
 	return cons, nil
+}
+
+// FixedHashBucket returns the fixed hash bucket for the application.
+func (a *App) FixedHashBucket() *cache.FixedHashBucket {
+	if a.fixedHashBucket == nil {
+		a.l.Error("fixed hash bucket has not been registered")
+		panic("fixed hash bucket has not been registered")
+	}
+	return a.fixedHashBucket
 }
 
 // ServiceEndpointHashBucket returns the service endpoint hash bucket for the application.

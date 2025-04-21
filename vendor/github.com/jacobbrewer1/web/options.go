@@ -302,6 +302,15 @@ func WithIndefiniteAsyncTask(name string, fn AsyncTaskFunc) StartOption {
 	}
 }
 
+// WithFixedHashBucket is a StartOption that sets up the fixed hash bucket.
+func WithFixedHashBucket(size uint) StartOption {
+	return func(a *App) error {
+		hb := cache.NewFixedHashBucket(size)
+		a.fixedHashBucket = hb
+		return nil
+	}
+}
+
 // WithServiceEndpointHashBucket is a StartOption that sets up the service endpoint hash bucket.
 func WithServiceEndpointHashBucket(appName string) StartOption {
 	return func(a *App) error {
