@@ -57,8 +57,18 @@ spec:
             - name: {{ include "secret-sync.name" . }}-config-volume
               mountPath: /tmp/config
           env:
-            - name: "KUBERNETES_ROLE"
-              value: {{ include "secret-sync.serviceAccountName" . }}
+            - name: "SERVICE_ACCOUNT_NAME"
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
+            - name: "POD_IP"
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: "NODE_NAME"
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             - name: "CONFIG_LOCATION"
               value: "/tmp/config/config.json"
             - name: "LOG_LEVEL"
