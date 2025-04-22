@@ -1,4 +1,4 @@
-package utils
+package version
 
 import (
 	"runtime/debug"
@@ -62,7 +62,6 @@ var IsModified = sync.OnceValue(func() bool {
 			if err != nil {
 				return false
 			}
-
 			return containsChanges
 		}
 	}

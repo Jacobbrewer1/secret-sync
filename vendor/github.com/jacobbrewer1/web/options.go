@@ -12,11 +12,11 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/jacobbrewer1/goredis"
 	"github.com/jacobbrewer1/vaulty"
-	"github.com/jacobbrewer1/vaulty/repositories"
+	"github.com/jacobbrewer1/vaulty/vsql"
 	"github.com/jacobbrewer1/web/cache"
 	"github.com/jacobbrewer1/web/health"
+	"github.com/jacobbrewer1/web/k8s"
 	"github.com/jacobbrewer1/web/logging"
-	"github.com/jacobbrewer1/web/utils"
 	"github.com/jacobbrewer1/workerpool"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -31,11 +31,17 @@ import (
 )
 
 const (
+	// inClusterNatsEndpoint is the default NATS endpoint for in-cluster communication.
 	inClusterNatsEndpoint = "nats://nats-headless.nats:4222"
 
+	// leaderElectionLeaseDuration is the duration that non-leader candidates will wait to force acquire leadership.
 	leaderElectionLeaseDuration = 15 * time.Second
+
+	// leaderElectionRenewDeadline is the duration that the acting leader will retry refreshing leadership before giving up.
 	leaderElectionRenewDeadline = 10 * time.Second
-	leaderElectionRetryPeriod   = 2 * time.Second
+
+	// leaderElectionRetryPeriod is the duration the LeaderElector clients should wait between tries of actions.
+	leaderElectionRetryPeriod = 2 * time.Second
 )
 
 var (
@@ -43,9 +49,12 @@ var (
 	ErrNoHostname = errors.New("no hostname provided")
 )
 
-// AsyncTaskFunc is a function that performs an async task.
-type AsyncTaskFunc = func(ctx context.Context)
+// AsyncTaskFunc is a function that runs asynchronously and takes a context.
+// The function should respect the context cancellation and return when the context is done.
+type AsyncTaskFunc = func(context.Context)
 
+// StartOption is a function that configures the application during startup.
+// It returns an error if the configuration fails.
 type StartOption func(*App) error
 
 // WithViperConfig is a StartOption that sets up the viper config.
@@ -106,23 +115,16 @@ func WithDatabaseFromVault() StartOption {
 			return fmt.Errorf("error getting secrets from vault: %w", err)
 		}
 
-		dbConnector, err := repositories.NewDatabaseConnector(
-			repositories.WithContext(a.baseCtx),
-			repositories.WithVaultClient(vc),
-			repositories.WithCurrentSecrets(vs),
-			repositories.WithViper(vip),
-			repositories.WithConnectorLogger(logging.LoggerWithComponent(a.l, "database_connector")),
+		a.db, err = vsql.ConnectDB(
+			a.baseCtx,
+			logging.LoggerWithComponent(a.l, "database_connector"),
+			vc,
+			vip,
+			vs,
 		)
 		if err != nil {
 			return fmt.Errorf("error creating database connector: %w", err)
 		}
-
-		db, err := dbConnector.ConnectDB()
-		if err != nil {
-			return fmt.Errorf("error connecting to database: %w", err)
-		}
-
-		a.db = db
 		return nil
 	}
 }
@@ -145,11 +147,13 @@ func WithInClusterKubeClient() StartOption {
 	}
 }
 
-// WithLeaderElection is a StartOption that sets up leader election.
+// WithLeaderElection is a StartOption that sets up leader election using Kubernetes lease locks.
+// The lockName parameter specifies the name of the lease lock resource to be created.
+// Returns an error if the pod name is not set or if the lock name is empty.
 func WithLeaderElection(lockName string) StartOption {
 	return func(a *App) error {
 		switch {
-		case utils.PodName() == "":
+		case k8s.PodName() == "":
 			return ErrNoHostname
 		case lockName == "":
 			return errors.New("lock name cannot be empty")
@@ -166,11 +170,11 @@ func WithLeaderElection(lockName string) StartOption {
 			Lock: &resourcelock.LeaseLock{
 				LeaseMeta: v1.ObjectMeta{
 					Name:      lockName,
-					Namespace: utils.DeployedNamespace(),
+					Namespace: k8s.DeployedNamespace(),
 				},
 				Client: kubeClient.CoordinationV1(),
 				LockConfig: resourcelock.ResourceLockConfig{
-					Identity: utils.PodName(),
+					Identity: k8s.PodName(),
 				},
 			},
 			LeaseDuration: leaderElectionLeaseDuration,
@@ -209,6 +213,10 @@ func WithLeaderElection(lockName string) StartOption {
 // WithHealthCheck is a StartOption that sets up the health2 check.
 func WithHealthCheck(checks ...*health.Check) StartOption {
 	return func(a *App) error {
+		if _, exists := a.servers.Load("health"); exists {
+			return errors.New("health check server already registered")
+		}
+
 		checker, err := health.NewChecker()
 		if err != nil {
 			return fmt.Errorf("error creating health checker: %w", err)
@@ -302,6 +310,15 @@ func WithIndefiniteAsyncTask(name string, fn AsyncTaskFunc) StartOption {
 	}
 }
 
+// WithFixedHashBucket is a StartOption that sets up the fixed hash bucket.
+func WithFixedHashBucket(size uint) StartOption {
+	return func(a *App) error {
+		hb := cache.NewFixedHashBucket(size)
+		a.fixedHashBucket = hb
+		return nil
+	}
+}
+
 // WithServiceEndpointHashBucket is a StartOption that sets up the service endpoint hash bucket.
 func WithServiceEndpointHashBucket(appName string) StartOption {
 	return func(a *App) error {
@@ -309,8 +326,8 @@ func WithServiceEndpointHashBucket(appName string) StartOption {
 			logging.LoggerWithComponent(a.l, "service_endpoint_hash_bucket"),
 			a.KubeClient(),
 			appName,
-			utils.DeployedNamespace(),
-			utils.PodName(),
+			k8s.DeployedNamespace(),
+			k8s.PodName(),
 		)
 
 		a.serviceEndpointHashBucket = sb
@@ -352,7 +369,7 @@ func WithNatsJetStream(streamName string, retentionPolicy jetstream.RetentionPol
 		}
 		a.natsJetStream = js
 
-		_, err = js.CreateStream(a.baseCtx, jetstream.StreamConfig{
+		_, err = js.CreateOrUpdateStream(a.baseCtx, jetstream.StreamConfig{
 			Name:      streamName,
 			Subjects:  subjects,
 			Storage:   jetstream.FileStorage,

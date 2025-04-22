@@ -142,18 +142,19 @@ github.com/jacobbrewer1/goredis
 ## explicit; go 1.24
 github.com/jacobbrewer1/uhttp
 github.com/jacobbrewer1/uhttp/common
-# github.com/jacobbrewer1/vaulty v0.1.10
+# github.com/jacobbrewer1/vaulty v0.1.15-0.20250422083501-a48cb7ba777e
 ## explicit; go 1.24
 github.com/jacobbrewer1/vaulty
-github.com/jacobbrewer1/vaulty/repositories
-# github.com/jacobbrewer1/web v0.0.5-0.20250417084959-f2ec19cc3940
+github.com/jacobbrewer1/vaulty/vsql
+# github.com/jacobbrewer1/web v0.0.6-0.20250422084306-f2722098b5d8
 ## explicit; go 1.24
 github.com/jacobbrewer1/web
 github.com/jacobbrewer1/web/cache
 github.com/jacobbrewer1/web/health
+github.com/jacobbrewer1/web/k8s
 github.com/jacobbrewer1/web/logging
 github.com/jacobbrewer1/web/slices
-github.com/jacobbrewer1/web/utils
+github.com/jacobbrewer1/web/version
 # github.com/jacobbrewer1/workerpool v0.0.4
 ## explicit; go 1.23
 github.com/jacobbrewer1/workerpool
@@ -191,7 +192,7 @@ github.com/modern-go/reflect2
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 ## explicit
 github.com/munnerz/goautoneg
-# github.com/nats-io/nats.go v1.41.1
+# github.com/nats-io/nats.go v1.41.2
 ## explicit; go 1.23.0
 github.com/nats-io/nats.go
 github.com/nats-io/nats.go/encoders/builtin
