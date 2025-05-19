@@ -1,6 +1,7 @@
 module github.com/jacobbrewer1/secret-sync
 
-go 1.24
+go 1.24.0
+
 toolchain go1.24.1
 
 require (
@@ -8,7 +9,7 @@ require (
 	github.com/jacobbrewer1/vaulty v0.1.15-0.20250422083501-a48cb7ba777e
 	github.com/jacobbrewer1/web v0.0.6
 	k8s.io/api v0.33.0
-	k8s.io/apimachinery v0.33.0
+	k8s.io/apimachinery v0.33.1
 	k8s.io/client-go v0.33.0
 )
 
