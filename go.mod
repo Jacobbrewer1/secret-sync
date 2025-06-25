@@ -8,9 +8,9 @@ require (
 	github.com/caarlos0/env/v10 v10.0.0
 	github.com/jacobbrewer1/vaulty v0.1.15-0.20250422083501-a48cb7ba777e
 	github.com/jacobbrewer1/web v0.0.6
-	k8s.io/api v0.33.1
+	k8s.io/api v0.33.2
 	k8s.io/apimachinery v0.33.2
-	k8s.io/client-go v0.33.1
+	k8s.io/client-go v0.33.2
 )
 
 require (
